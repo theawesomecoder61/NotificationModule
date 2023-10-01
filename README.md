@@ -1,6 +1,6 @@
 [![CI-Release](https://github.com/wiiu-env/NotificationModule/actions/workflows/ci.yml/badge.svg)](https://github.com/wiiu-env/NotificationModule/actions/workflows/ci.yml)
 
-See [libnotifications](https://github.com/wiiu-env/libnotifications).
+See [libnotifications](https://github.com/theawesomecoder61/libnotifications).
 
 ## Usage
 (`[ENVIRONMENT]` is a placeholder for the actual environment name.)
