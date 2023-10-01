@@ -1,4 +1,5 @@
 #include "gui/Notification.h"
+#include "gui/Overlay.h"
 #include "retain_vars.hpp"
 #include "utils/utils.h"
 #include <memory>
@@ -8,6 +9,8 @@
 void ExportCleanUp() {
     std::lock_guard<std::mutex> lock(gNotificationListMutex);
     gNotificationList.clear();
+    std::lock_guard<std::mutex> lockOverlay(gOverlayListMutex);
+    gOverlayList.clear();
 }
 
 NotificationModuleStatus NMAddStaticNotification(const char *text,
@@ -190,6 +193,84 @@ NotificationModuleStatus NMGetVersion(NotificationModuleAPIVersion *outVersion) 
     return NOTIFICATION_MODULE_RESULT_SUCCESS;
 }
 
+
+NotificationModuleStatus NMEnableOverlay(NotificationModuleHandle *outHandle, NMColor backgroundColor) {
+    if (outHandle == nullptr) {
+        return NOTIFICATION_MODULE_RESULT_INVALID_ARGUMENT;
+    }
+    *outHandle = 0;
+    if (!gOverlayFrame) {
+        return NOTIFICATION_MODULE_RESULT_OVERLAY_NOT_READY;
+    }
+
+    auto overlay = make_shared_nothrow<Overlay>((GX2Color){backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a});
+    if (!overlay) {
+        return NOTIFICATION_MODULE_RESULT_ALLOCATION_FAILED;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(gOverlayListMutex);
+        *outHandle = overlay->getHandle();
+        gOverlayFrame->addOverlay(overlay);
+        gOverlayList.push_front(overlay);
+    }
+
+    return NOTIFICATION_MODULE_RESULT_SUCCESS;
+}
+
+NotificationModuleStatus NMSetOverlayAlpha(NotificationModuleHandle handle, float alpha) {
+    NotificationModuleStatus res = NOTIFICATION_MODULE_RESULT_INVALID_HANDLE;
+    std::lock_guard<std::mutex> lock(gOverlayListMutex);
+    for (auto &cur : gOverlayList) {
+        if (cur->getHandle() == handle) {
+            cur->setAlpha(alpha);
+            res = NOTIFICATION_MODULE_RESULT_SUCCESS;
+            break;
+        }
+    }
+    return res;
+}
+
+NotificationModuleStatus NMGetOverlayAlpha(NotificationModuleHandle handle, float *alpha) {
+    NotificationModuleStatus res = NOTIFICATION_MODULE_RESULT_INVALID_HANDLE;
+    std::lock_guard<std::mutex> lock(gOverlayListMutex);
+    for (auto &cur : gOverlayList) {
+        if (cur->getHandle() == handle) {
+            float alp = cur->getAlpha();
+            memcpy(alpha, &alp, 4);
+            res = NOTIFICATION_MODULE_RESULT_SUCCESS;
+            break;
+        }
+    }
+    return res;
+}
+
+NotificationModuleStatus NMUpdateOverlayBackgroundColor(NotificationModuleHandle handle, NMColor backgroundColor) {
+    NotificationModuleStatus res = NOTIFICATION_MODULE_RESULT_INVALID_HANDLE;
+    std::lock_guard<std::mutex> lock(gOverlayListMutex);
+    for (auto &cur : gOverlayList) {
+        if (cur->getHandle() == handle) {
+            cur->updateBackgroundColor((GX2Color){backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a});
+            res = NOTIFICATION_MODULE_RESULT_SUCCESS;
+            break;
+        }
+    }
+    return res;
+}
+
+NotificationModuleStatus NMDisableOverlay(NotificationModuleHandle handle) {
+    NotificationModuleStatus res = NOTIFICATION_MODULE_RESULT_INVALID_HANDLE;
+    std::lock_guard<std::mutex> lock(gOverlayListMutex);
+    for (auto &cur : gOverlayList) {
+        if (cur->getHandle() == handle) {
+            cur->updateStatus(OVERLAY_STATUS_INFO);
+            res = NOTIFICATION_MODULE_RESULT_SUCCESS;
+            break;
+        }
+    }
+    return res;
+}
+
 WUMS_EXPORT_FUNCTION(NMAddDynamicNotification);
 WUMS_EXPORT_FUNCTION(NMAddStaticNotification);
 WUMS_EXPORT_FUNCTION(NMUpdateDynamicNotificationText);
@@ -198,3 +279,10 @@ WUMS_EXPORT_FUNCTION(NMUpdateDynamicNotificationTextColor);
 WUMS_EXPORT_FUNCTION(NMFinishDynamicNotification);
 WUMS_EXPORT_FUNCTION(NMIsOverlayReady);
 WUMS_EXPORT_FUNCTION(NMGetVersion);
+
+
+WUMS_EXPORT_FUNCTION(NMEnableOverlay);
+WUMS_EXPORT_FUNCTION(NMSetOverlayAlpha);
+WUMS_EXPORT_FUNCTION(NMGetOverlayAlpha);
+WUMS_EXPORT_FUNCTION(NMUpdateOverlayBackgroundColor);
+WUMS_EXPORT_FUNCTION(NMDisableOverlay);

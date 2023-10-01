@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gui/Notification.h"
+#include "gui/Overlay.h"
 #include <forward_list>
 #include <memory>
 #include <mutex>
@@ -45,5 +46,6 @@ inline uint8_t RGBComponentToSRGB(uint8_t ci) {
     return RGBComponentToSRGBTable[ci];
 }
 
-extern std::mutex gNotificationListMutex;
+extern std::mutex gNotificationListMutex, gOverlayListMutex;
 extern std::forward_list<std::shared_ptr<Notification>> gNotificationList;
+extern std::forward_list<std::shared_ptr<Overlay>> gOverlayList;

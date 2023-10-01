@@ -11,10 +11,30 @@ void OverlayFrame::addNotification(std::shared_ptr<Notification> status) {
     }
 }
 
+void OverlayFrame::addOverlay(std::shared_ptr<Overlay> status) {
+    status->setParent(this);
+    append(status.get());
+    status->setAlignment(ALIGN_TOP_LEFT);
+    status->setEffect(EFFECT_FADE, 0, 255);
+    {
+        std::lock_guard<std::mutex> lockOverlay(gOverlayListMutex);
+        listOverlay.push_front(std::move(status));
+    }
+}
+
 void OverlayFrame::OnFadeOutFinished(GuiElement *element) {
     auto *item = dynamic_cast<Notification *>(element);
     if (item) {
         item->mInternalStatus = NOTIFICATION_STATUS_REQUESTED_EXIT;
+    } else {
+        DEBUG_FUNCTION_LINE_ERR("Failed to fade out item: dynamic cast failed");
+    }
+}
+
+void OverlayFrame::OnFadeOutOverlayFinished(GuiElement *element) {
+    auto *item = dynamic_cast<Overlay *>(element);
+    if (item) {
+        item->mInternalStatus = OVERLAY_STATUS_REQUESTED_EXIT;
     } else {
         DEBUG_FUNCTION_LINE_ERR("Failed to fade out item: dynamic cast failed");
     }
@@ -33,6 +53,12 @@ void OverlayFrame::clearElements() {
         remove(element.get());
     }
     list.clear();
+
+    std::lock_guard<std::mutex> lockOverlay(gOverlayListMutex);
+    for (auto &element : listOverlay) {
+        remove(element.get());
+    }
+    listOverlay.clear();
 }
 
 void OverlayFrame::process() {
@@ -68,5 +94,27 @@ void OverlayFrame::process() {
             break;
         }
         oit = it++;
+    }
+
+    std::lock_guard<std::mutex> lockOverlay(gOverlayListMutex);
+
+    for (auto &item : listOverlay) {
+        item->process();
+        if (item->mInternalStatus == OVERLAY_STATUS_REQUESTED_FADE_OUT_AND_EXIT) {
+            item->resetEffects();
+            item->setEffect(EFFECT_SLIDE_LEFT | EFFECT_SLIDE_OUT | EFFECT_SLIDE_FROM, 1280);
+            item->effectFinished.connect(this, &OverlayFrame::OnFadeOutOverlayFinished);
+            item->mInternalStatus = OVERLAY_STATUS_EFFECT;
+        }
+    }
+    auto oitOverlay = listOverlay.before_begin(), itOverlay = std::next(oitOverlay);
+    while (itOverlay != listOverlay.end()) {
+        if ((*itOverlay)->mInternalStatus == OVERLAY_STATUS_REQUESTED_EXIT) {
+            (*itOverlay)->callDeleteCallback();
+            remove((*itOverlay).get());
+            listOverlay.erase_after(oitOverlay);
+            break;
+        }
+        oitOverlay = itOverlay++;
     }
 }
